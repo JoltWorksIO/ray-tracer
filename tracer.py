@@ -3,20 +3,33 @@ from PIL import Image
 from numba import njit
 
 
+@njit
+def fetch_triangle(vertices, indices, i):
+    base = i * 3
+    ia = indices[base]
+    ib = indices[base + 1]
+    ic = indices[base + 2]
+    a = vertices[ia]
+    b = vertices[ib]
+    c = vertices[ic]
+    return a, b, c
+
+
+@njit
+def get_face_count(indices):
+    return len(indices) // 3
+
+
 class Mesh:
     def __init__(self, vertices, indices):
         self.vertices = np.array(vertices, dtype=np.float32)
         self.indices = np.array(indices, dtype=np.uint16)
 
     def __getitem__(self, i):
-        base = i * 3
-        a = self.vertices[base]
-        b = self.vertices[base + 1]
-        c = self.vertices[base + 2]
-        return a, b, c
+        return fetch_triangle(self.vertices, self.indices, i)
 
     def faces(self):
-        return len(self.indices) // 3
+        return get_face_count(self.indices)
 
 
 @njit
