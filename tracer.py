@@ -1,5 +1,6 @@
 import numpy as np
 from PIL import Image
+from numba import njit
 
 
 class Mesh:
@@ -18,15 +19,18 @@ class Mesh:
         return len(self.indices) // 3
 
 
+@njit
 def remap(value, src_min, src_max, dst_min, dst_max):
     return ((dst_max - dst_min) / (src_max - src_min)) * (value - src_min) + dst_min
 
 
+@njit
 def triple(a, b, c):
     # det(a, b, c) := <a x b, c>
     return np.dot(np.cross(a, b), c)
 
 
+@njit
 def intersect(origin, direction, a, b, c):
     # O + td = vAB + wAC + A
     # <=> AO = vAB + wAC - td
@@ -74,6 +78,7 @@ def intersect(origin, direction, a, b, c):
     return t, weights
 
 
+@njit
 def normalize(v):
     return v / np.linalg.norm(v)
 
