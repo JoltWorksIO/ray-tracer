@@ -1,9 +1,9 @@
 import numpy as np
 from PIL import Image
-from numba import njit
+from numba import jit
 
 
-@njit
+@jit(nopython=True)
 def fetch_triangle(vertices, indices, i):
     base = i * 3
     ia = indices[base]
@@ -15,7 +15,7 @@ def fetch_triangle(vertices, indices, i):
     return a, b, c
 
 
-@njit
+@jit(nopython=True)
 def get_face_count(indices):
     return len(indices) // 3
 
@@ -32,18 +32,18 @@ class Mesh:
         return get_face_count(self.indices)
 
 
-@njit
+@jit(nopython=True)
 def remap(value, src_min, src_max, dst_min, dst_max):
     return ((dst_max - dst_min) / (src_max - src_min)) * (value - src_min) + dst_min
 
 
-@njit
+@jit(nopython=True)
 def triple(a, b, c):
     # det(a, b, c) := <a x b, c>
     return np.dot(np.cross(a, b), c)
 
 
-@njit
+@jit(nopython=True)
 def intersect(origin, direction, a, b, c):
     # O + td = vAB + wAC + A
     # <=> AO = vAB + wAC - td
@@ -91,7 +91,7 @@ def intersect(origin, direction, a, b, c):
     return t, weights
 
 
-@njit
+@jit(nopython=True)
 def normalize(v):
     return v / np.linalg.norm(v)
 
