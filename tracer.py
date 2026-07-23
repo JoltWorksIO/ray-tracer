@@ -20,16 +20,25 @@ def get_face_count(indices):
     return len(indices) // 3
 
 
+@jit(nopython=True)
+def translate_vertices(vertices, x, y, z):
+    t = np.array([x, y, z], dtype=np.float32)
+    return [vertex + t for vertex in vertices]
+
+
 class Mesh:
     def __init__(self, vertices, indices):
-        self.vertices = np.array(vertices, dtype=np.float32)
-        self.indices = np.array(indices, dtype=np.uint16)
+        self.vertices = np.array(vertices, dtype=np.float32, copy=True)
+        self.indices = np.array(indices, dtype=np.uint16, copy=True)
 
     def __getitem__(self, i):
         return fetch_triangle(self.vertices, self.indices, i)
 
     def faces(self):
         return get_face_count(self.indices)
+
+    def translate(self, x=0, y=0, z=0):
+        return Mesh(translate_vertices(self.vertices, x, y, z), self.indices)
 
 
 @jit(nopython=True)
@@ -96,9 +105,43 @@ def normalize(v):
     return v / np.linalg.norm(v)
 
 
+@jit(nopython=True)
+def intersect_mesh(ray_origin, ray_direction, t_min, t_max, vertices, indices):
+    t_closest = t_max
+    weights_closest = None
+    for i in range(get_face_count(indices)):
+        # Find intersection with the ray
+        a, b, c = fetch_triangle(vertices, indices, i)
+        hit = intersect(ray_origin, ray_direction, a, b, c)
+
+        # Keep if closest
+        if hit is not None:
+            t, uvw = hit
+            if t_min <= t < t_closest:
+                t_closest = t
+                weights_closest = uvw
+    return t_closest, weights_closest
+
+
+def trace(ray_origin, ray_direction, t_min, t_max, meshes):
+    # For every object in the scene
+    t_closest = t_max
+    weights_closest = None
+    for mesh in meshes:
+        t_hit, weights = intersect_mesh(
+            ray_origin, ray_direction, t_min, t_closest, mesh.vertices, mesh.indices
+        )
+        if weights is not None and t_hit < t_closest:
+            t_closest = t_hit
+            weights_closest = weights
+    return t_closest, weights_closest
+
+
 def main():
     meshes = []
-    meshes.append(Mesh([[0, 0.7, 2], [0.7, -0.7, 2], [-0.7, -0.7, 2]], [0, 1, 2]))
+    triangle = Mesh([[0, 0.7, 2], [0.7, -0.7, 2], [-0.7, -0.7, 2]], [0, 1, 2])
+    meshes.append(triangle)
+    meshes.append(triangle.translate(2, -1, 4))
 
     width = 1280
     height = 720
@@ -109,29 +152,28 @@ def main():
 
     ray_origin = np.array([0, 0, 0], dtype=np.float32)
 
-    t_far = 100.0
+    t_min = 0.1
+    t_max = 100.0
 
+    # For every pixel
     for y in range(height):
         for x in range(width):
+            # Construct a ray from the eye
             px = remap(x + 0.5, 0, width, -1, 1) * aspect
             py = remap(y + 0.5, height, 0, -1, 1)
+            ray_direction = normalize(
+                np.array([px, py, 1], dtype=np.float32) - ray_origin
+            )
 
-            ray_direction = np.array([px, py, 1], dtype=np.float32) - ray_origin
-            unit_direction = normalize(ray_direction)
+            t_closest, weights_closest = trace(
+                ray_origin, ray_direction, t_min, t_max, meshes
+            )
 
-            t_near = t_far
-            for mesh in meshes:
-                for i in range(mesh.faces()):
-                    a, b, c = mesh[i]
+            color = [0, 51, 102]
+            if weights_closest is not None:
+                color = np.array(255.0 * weights_closest, dtype=np.uint8)
 
-                    hit = intersect(ray_origin, unit_direction, a, b, c)
-
-                    if hit:
-                        t, weights = hit
-                        if t > 0 and t < t_near:
-                            t_near = t
-                            color = np.array(255.0 * weights, dtype=np.uint8)
-                            image[y, x] = color
+            image[y, x] = color
 
     Image.fromarray(image).save("out.png")
 
